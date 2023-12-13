@@ -1,0 +1,16 @@
+name: isresmat
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.7
+  - pytorch
+  - transformers
+  - matplotlib
+  - tensorboard
+  - unidecode
+  - scikit-learn
+  - chardet
+prefix: /home/dxy/miniconda3/envs/isresmat
