@@ -56,8 +56,9 @@ class BertFoMatching(nn.Module):
 
         # configuration = BertConfig()
         # self.bert = BertModel(configuration)
-        self.bert = BertModel.from_pretrained(
-            'bert-base-uncased' if model_loc is None else os.path.join(model_loc, 'bert-base-uncased'))
+        # self.bert = BertModel.from_pretrained(
+        #     'bert-base-uncased' if model_loc is None else os.path.join(model_loc, 'bert-base-uncased'))
+        self.bert = BertModel.from_pretrained('bert-base-uncased')
         bert_config = self.bert.config
         classifier_dropout = (
             bert_config.classifier_dropout if bert_config.classifier_dropout is not None else bert_config.hidden_dropout_prob

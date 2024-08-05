@@ -14,8 +14,8 @@ from src.data_loader.golden_standard_loader import GoldenStandardLoader
 
 class TableMultiColRandomIntersectStreamDataset(torch.utils.data.Dataset):
     # this tokenizer will be set in the function get_dataset
-    tokenizer = None
-    max_model_input_length = None
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    max_model_input_length = 512
 
     def __init__(self, df, ds_length,
                  frag_height,
@@ -649,9 +649,9 @@ class TableMultiColRandomIntersectStreamDataset(torch.utils.data.Dataset):
                     numerical_col_bins=0,
                     numerical_col_window_size=5,
                     model_loc=None):
-        cls.tokenizer = BertTokenizer.from_pretrained(
-            'bert-base-uncased' if model_loc is None else os.path.join(model_loc, 'bert-base-uncased'))
-        # cls.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        # cls.tokenizer = BertTokenizer.from_pretrained(
+        #     'bert-base-uncased' if model_loc is None else os.path.join(model_loc, 'bert-base-uncased'))
+        cls.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
         cls.max_model_input_length = 512
 
