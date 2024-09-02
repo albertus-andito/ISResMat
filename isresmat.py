@@ -797,20 +797,24 @@ class TrainApp():
             return_logits=False,
         )
 
-
-        sim_matrix, opt_trans_sim_matrix = self.model.get_sim_matrix_with_recloss()
-
-        orig_sim_rec_loss = torch.nn.functional.cross_entropy(sim_matrix.view(-1), opt_trans_sim_matrix.view(-1))
-        # could see it as a regularization on a part of the parameters of the model
-        sim_rec_loss = orig_sim_rec_loss
-
-        ##### 6 linear increase
-        num_warmup_steps = 0.3 * total_iter_len
-        if curr_iter <= num_warmup_steps:
-            factor = curr_iter / num_warmup_steps
-            sim_recloss_weight = factor * self.rec_loss_weight
+        if self.rec_loss_weight == 0:
+            sim_matrix = self.model.get_sim_matrix()
+            sim_rec_loss = torch.tensor(0.0)
+            sim_recloss_weight = 0.0
         else:
-            sim_recloss_weight = self.rec_loss_weight
+            sim_matrix, opt_trans_sim_matrix = self.model.get_sim_matrix_with_recloss()
+
+            orig_sim_rec_loss = torch.nn.functional.cross_entropy(sim_matrix.view(-1), opt_trans_sim_matrix.view(-1))
+            # could see it as a regularization on a part of the parameters of the model
+            sim_rec_loss = orig_sim_rec_loss
+
+            ##### 6 linear increase
+            num_warmup_steps = 0.3 * total_iter_len
+            if curr_iter <= num_warmup_steps:
+                factor = curr_iter / num_warmup_steps
+                sim_recloss_weight = factor * self.rec_loss_weight
+            else:
+                sim_recloss_weight = self.rec_loss_weight
 
         self.curr_sim_matrix = sim_matrix.detach().clone().cpu()
 

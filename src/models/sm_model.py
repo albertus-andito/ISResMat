@@ -184,6 +184,15 @@ class BertFoMatching(nn.Module):
         loss = self.CE_loss_func(local_logits, match_labels)
         return loss
 
+    def get_sim_matrix(self):
+        if self.agent_delegate_loss_weight == 0:
+            return None
+        else:
+            src_agents = self.src_agents_layer.agents
+            tgt_agents = self.tgt_agents_layer.agents
+            sim_matrix = torch.matmul(src_agents, tgt_agents.T)
+            return sim_matrix
+
     def get_sim_matrix_with_recloss(self):
         src_agents = self.src_agents_layer.agents
         tgt_agents = self.tgt_agents_layer.agents
