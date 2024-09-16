@@ -586,7 +586,8 @@ class TrainApp():
         model = BertFoMatching(src_n_cls, tgt_n_cls, self.output_repr_dim,
                                self.t_dist_scale_factor, self.temperature,
                                self.sk_n_iter, self.sk_reg_weight, self.cols_repr_init_std,
-                               os.path.join(self.data_dir, 'pretrained_model'))
+                               os.path.join(self.data_dir, 'pretrained_model'),
+                               self.meta_match_loss_weight, self.agent_delegate_loss_weight)
 
         return model.to(self.device)
 

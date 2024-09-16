@@ -51,7 +51,8 @@ class AgentsLayer(nn.Module):
 
 class BertFoMatching(nn.Module):
     def __init__(self, n_cls_src, n_cls_tgt, output_dim, scale_factor, cont_temperature,
-                 sk_n_iter, sk_reg_weight, cols_repr_init_std, model_loc=None):
+                 sk_n_iter, sk_reg_weight, cols_repr_init_std, model_loc=None,
+                 meta_match_loss_weight=1.0, agent_delegate_loss_weight=1.0):
         super(BertFoMatching, self).__init__()
 
         # configuration = BertConfig()
@@ -73,10 +74,13 @@ class BertFoMatching(nn.Module):
             nn.Linear(output_dim, output_dim),
         )
 
-        self.src_agents_layer = AgentsLayer(self.n_cls_src, output_dim, scale_factor,
-                                            cols_repr_init_std=cols_repr_init_std)
-        self.tgt_agents_layer = AgentsLayer(self.n_cls_tgt, output_dim, scale_factor,
-                                            cols_repr_init_std=cols_repr_init_std)
+        self.meta_match_loss_weight = meta_match_loss_weight
+        self.agent_delegate_loss_weight = agent_delegate_loss_weight
+        if self.agent_delegate_loss_weight > 0:
+            self.src_agents_layer = AgentsLayer(self.n_cls_src, output_dim, scale_factor,
+                                                cols_repr_init_std=cols_repr_init_std)
+            self.tgt_agents_layer = AgentsLayer(self.n_cls_tgt, output_dim, scale_factor,
+                                                cols_repr_init_std=cols_repr_init_std)
 
         self.cont_temperature = cont_temperature
         self.sk_n_iter = sk_n_iter
@@ -118,8 +122,14 @@ class BertFoMatching(nn.Module):
             total_labels_length = sum(len(labels) for labels in flatten_label_ls)
             assert total_labels_length == len(cls_logits)
 
-            match_loss = self.compute_batch_cols_contrastive_loss(cls_logits, label_ls)
-            self_assign_loss = self.self_assign_dist_loss(cls_logits, flatten_label_ls, data_source)
+            if self.meta_match_loss_weight > 0:
+                match_loss = self.compute_batch_cols_contrastive_loss(cls_logits, label_ls)
+            else:
+                match_loss = torch.tensor(0.)
+            if self.agent_delegate_loss_weight > 0:
+                self_assign_loss = self.self_assign_dist_loss(cls_logits, flatten_label_ls, data_source)
+            else:
+                self_assign_loss = torch.tensor(0.)
 
             return match_loss, self_assign_loss
         else:
