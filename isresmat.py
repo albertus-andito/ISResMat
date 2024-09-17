@@ -817,7 +817,8 @@ class TrainApp():
             else:
                 sim_recloss_weight = self.rec_loss_weight
 
-        self.curr_sim_matrix = sim_matrix.detach().clone().cpu()
+        if sim_matrix is not None:
+            self.curr_sim_matrix = sim_matrix.detach().clone().cpu()
 
         # losses with different weight
         loss = src_match_loss * self.meta_match_loss_weight \
