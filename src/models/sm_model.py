@@ -195,16 +195,16 @@ class BertFoMatching(nn.Module):
         return loss
 
     def get_sim_matrix(self):
-        src_agents = self.src_agents_layer.agents
-        tgt_agents = self.tgt_agents_layer.agents
-        sim_matrix = torch.matmul(src_agents, tgt_agents.T)
-        return sim_matrix
+        if self.agent_delegate_loss_weight == 0:
+            return None
+        else:
+            src_agents = self.src_agents_layer.agents
+            tgt_agents = self.tgt_agents_layer.agents
+            sim_matrix = torch.matmul(src_agents, tgt_agents.T)
+            return sim_matrix
 
     def get_sim_matrix_with_recloss(self):
-        src_agents = self.src_agents_layer.agents
-        tgt_agents = self.tgt_agents_layer.agents
-        sim_matrix = torch.matmul(src_agents, tgt_agents.T)
-
+        sim_matrix = self.get_sim_matrix()
         # sim_matrix_loss = ((sim_matrix + 1) ** 2).sum()
         # sim_matrix_loss = sim_matrix.abs() ** 2
 
