@@ -735,6 +735,16 @@ class TrainApp():
         src_table_name = self.orig_file_src.split("/")[-1].split(".")[0]
         tgt_table_name = self.orig_file_tgt.split("/")[-1].split(".")[0]
         matches = dict()
+
+        if self.curr_sim_matrix is None and self.agent_delegate_loss_weight == 0:
+            src_val_ds, tgt_val_ds = self.init_solo_col_dataset(self.src_trn_ds, self.tgt_trn_ds)
+            val_batch_size = self.batch_size * self.frag_width * 2
+            src_val_dl = self.init_dl(src_val_ds, val_batch_size)
+            tgt_val_dl = self.init_dl(tgt_val_ds, val_batch_size)
+            cls_token_id = self.src_trn_ds.tokenizer.cls_token_id
+            self.calculate_sim_matrix_from_centroids(self.model, src_val_dl, tgt_val_dl, src_val_ds, tgt_val_ds,
+                                                     self.src_df, self.tgt_df, cls_token_id)
+
         for i in range(self.curr_sim_matrix.shape[0]):
             for j in range(self.curr_sim_matrix.shape[1]):
                 matches[((src_table_name, self.src_trn_ds.id2label[i]),
@@ -751,6 +761,84 @@ class TrainApp():
             for match in self.numerical_golden_matches_set:
                 if match in top_ground_truth_matches:
                     self.curr_numerical_matches_set.add(match)
+
+    def init_solo_col_dataset(self, src_trn_ds: TableMultiColRandomIntersectStreamDataset,
+                              tgt_trn_ds: TableMultiColRandomIntersectStreamDataset):
+        src_val_ds = SoloColsDataset(src_trn_ds, self.n_val_cols)
+        tgt_val_ds = SoloColsDataset(tgt_trn_ds, self.n_val_cols)
+        return src_val_ds, tgt_val_ds
+
+    def calculate_sim_matrix_from_centroids(self, model, src_trn_dl, tgt_trn_dl, src_trn_ds, tgt_trn_ds, src_df, tgt_df,
+                                            cls_token_id):
+        src_final_repr, src_flat_label_ls = self.generate_embeddings(model, src_trn_dl, 'src', src_trn_ds, cls_token_id)
+        tgt_final_repr, tgt_flat_label_ls = self.generate_embeddings(model, tgt_trn_dl, 'tgt', tgt_trn_ds, cls_token_id)
+
+        src_final_repr = torch.tensor(src_final_repr)
+        src_flat_label_ls = torch.tensor(src_flat_label_ls)
+        tgt_final_repr = torch.tensor(tgt_final_repr)
+        tgt_flat_label_ls = torch.tensor(tgt_flat_label_ls)
+
+        src_counts = torch.bincount(src_flat_label_ls)
+        tgt_counts = torch.bincount(tgt_flat_label_ls)
+        assert all(count == self.n_trn_cols for count in src_counts) and len(src_counts) == src_df.shape[1]
+        assert all(count == self.n_trn_cols for count in tgt_counts) and len(src_counts) == src_df.shape[1]
+
+        #################################################################
+        #################################################################
+        # make sure the first row of it is corresponding to
+        # the first column of the table, which means that the average embedding
+        # of the embeddings with label 0 should be put into it.
+        # Same for all others.
+        src_centers = torch.empty((src_df.shape[1], src_final_repr.shape[1]),
+                                  dtype=src_final_repr.dtype)
+        for label in range(src_df.shape[1]):
+            label_mask = src_flat_label_ls == label
+            label_embeddings = src_final_repr[label_mask]
+            center_embedding = torch.mean(label_embeddings, dim=0)
+            center_embedding = F.normalize(center_embedding, dim=0)
+            src_centers[label] = center_embedding
+
+        tgt_centers = torch.empty((tgt_df.shape[1], tgt_final_repr.shape[1]),
+                                  dtype=tgt_final_repr.dtype)
+        for label in range(tgt_df.shape[1]):
+            label_mask = tgt_flat_label_ls == label
+            label_embeddings = tgt_final_repr[label_mask]
+            center_embedding = torch.mean(label_embeddings, dim=0)
+            center_embedding = F.normalize(center_embedding, dim=0)
+            tgt_centers[label] = center_embedding
+
+        # update the similarity matrix used to obtain the matching results
+        self.curr_sim_matrix = torch.matmul(src_centers, tgt_centers.T)
+
+    def generate_embeddings(self, model, dataloader, data_source, dataset, cls_token_id, return_orig_logits=False):
+        final_repr = []
+        flat_label_ls = []
+        with torch.no_grad():
+            model.eval()
+            for batch_ndx, batch_tup in enumerate(tqdm(dataloader)):
+                inputs = batch_tup['data']
+                labels_ls = batch_tup['label']
+
+                input_ids = inputs['input_ids'].to(self.device, non_blocking=True)
+                token_type_ids = inputs['token_type_ids'].to(self.device, non_blocking=True)
+                attention_mask = inputs['attention_mask'].to(self.device, non_blocking=True)
+                # model needs this id to filter out the output correspond to the [CLS] token
+                # cls_token_id = dataset.tokenizer.cls_token_id
+                logits = model(
+                    cls_token_id,
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    token_type_ids=token_type_ids,
+                    label_ls=labels_ls,
+                    data_source=data_source,
+                    return_logits=True,
+                )
+                final_repr.extend(logits.tolist())
+                flat_label_ls.extend([num for sublist in labels_ls for subsublist in sublist for num in subsublist])
+
+        # put it back to train mode
+        model.train()
+        return final_repr, flat_label_ls
 
     def compute_batch(self, src_batch, tgt_batch, total_iter_len, curr_iter):
         src_inputs = src_batch['data']
@@ -847,6 +935,7 @@ class TrainApp():
                     # the normal train to match mode, the similarity matrix is updated in compute_batch function
                     self.update_curr_match_status()
                     self.record_middle_info()
+
 
                 if len(self.check_point_cols_ls) == 0 and process_mode == 0:
                     # if it's the final point, save the records to a file
